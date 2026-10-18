@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fraktal złotego podziału</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+/* Layout: kwadratowa scena z fraktalem po lewej (przyklejona przy przewijaniu), po prawej karta kwartałów, ustawień i liczenia; na telefonie jedna kolumna */
+:root{
+  --bg:#eef0f4;
+  --surface:#ffffff;
+  --stage:#e1e5ec;
+  --fg:#14171d;
+  --muted:#596173;
+  --line:#d4d9e2;
+  --accent:#2d4b93;
+  --accent-soft:#e4eaf7;
+  --shadow:0 1px 2px rgba(20,23,29,.10);
+  --f-display:"Spectral", Georgia, "Times New Roman", serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1116; --surface:#171a21; --stage:#262b35; --fg:#e7e9ee; --muted:#9aa2b2; --line:#2d323d;
+    --accent:#9fb4ef; --accent-soft:#222b40; --shadow:0 1px 2px rgba(0,0,0,.45);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1116; --surface:#171a21; --stage:#262b35; --fg:#e7e9ee; --muted:#9aa2b2; --line:#2d323d;
+  --accent:#9fb4ef; --accent-soft:#222b40; --shadow:0 1px 2px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:16px;padding-block:28px 56px;display:grid;gap:24px}
+
+header h1{margin:0;font-family:var(--f-display);font-weight:600;font-size:clamp(1.9rem,1.2rem + 2.4vw,2.8rem);line-height:1.1;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:.6rem 0 0;color:var(--muted);max-width:66ch}
+.m{font-family:var(--f-display);font-style:italic;font-size:1.08em}
+
+.layout{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:880px){.layout{grid-template-columns:minmax(0,1fr)}}
+.stage-col{display:grid;gap:10px;min-width:0}
+@media (min-width:881px){.stage-col{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px)}}
+.stage{position:relative;aspect-ratio:1/1;width:100%;max-width:100%;background:var(--stage);border-radius:16px;overflow:hidden}
+.stage canvas{display:block;width:100%;height:100%;touch-action:pan-y}
+.stage.zoomed canvas{touch-action:none;cursor:grab}
+.stage.dragging canvas{cursor:grabbing}
+.zoombar{position:absolute;right:10px;bottom:10px;display:flex;gap:6px;align-items:center}
+.zb,.zoomval{height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+.zb{min-width:34px;padding:0 10px;font:500 .95rem/1 var(--f-mono);cursor:pointer}
+.zb.word{font:500 .8rem/1 var(--f-body)}
+.zb:hover:not(:disabled){border-color:var(--accent)}
+.zb:disabled{opacity:.45;cursor:default}
+.zoomval{display:flex;align-items:center;padding:0 9px;font:500 .8rem var(--f-mono);font-variant-numeric:tabular-nums}
+
+.panel{display:grid;gap:16px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;display:grid;gap:20px;min-width:0}
+.card h2{margin:0;font-size:.74rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+
+.field{display:grid;gap:9px}
+.field-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.field-head label,.lbl{font-weight:500}
+.val{font-family:var(--f-mono);font-size:.86rem;color:var(--muted);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;margin:0;accent-color:var(--accent)}
+.chip:focus-visible,.btn:focus-visible,.zb:focus-visible,input[type=range]:focus-visible,input[type=color]:focus-visible,input[type=text]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--fg);font:400 .8rem var(--f-mono);cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.note{margin:0;font-size:.8125rem;color:var(--muted);max-width:60ch}
+
+.colors{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.color{display:flex;align-items:center;gap:8px;font-size:.875rem;cursor:pointer}
+input[type=color]{width:40px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--surface);cursor:pointer}
+.btn{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--fg);font:inherit;font-size:.85rem;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+
+/* kwartały */
+.qinput{display:flex;gap:8px}
+.qinput input{flex:1 1 auto;min-width:0;height:40px;padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--fg);font:500 1rem var(--f-mono);letter-spacing:.02em}
+.qinput input[aria-invalid="true"]{border-color:#c2410c}
+.qpad{display:flex;flex-wrap:wrap;gap:6px}
+.qpad .btn{font-family:var(--f-mono);min-width:48px}
+.path{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font:500 .86rem/1.6 var(--f-mono);min-height:1.6em}
+.path .step{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line)}
+.path .step.on{border-color:var(--hl);box-shadow:inset 0 0 0 1px var(--hl)}
+.path .sep{color:var(--muted)}
+.path .dot{width:9px;height:9px;border-radius:50%;background:var(--hl)}
+.qmeta{font-size:.8125rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.total{display:grid;gap:6px}
+.eyebrow{font-size:.8125rem;color:var(--muted)}
+.big{font-family:var(--f-display);font-weight:600;font-size:clamp(2.6rem,2rem + 2vw,3.6rem);line-height:1;letter-spacing:-.01em;font-variant-numeric:lining-nums tabular-nums}
+.formula{font-family:var(--f-mono);font-size:.85rem;color:var(--muted)}
+.formula sup{font-size:.7em}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px;margin:0}
+.stats div{display:grid;gap:2px;min-width:0}
+.stats dt{display:flex;align-items:center;gap:6px;font-size:.8125rem;color:var(--muted)}
+.stats dd{margin:0;font-family:var(--f-mono);font-size:1.12rem;font-variant-numeric:tabular-nums}
+.sw{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;border:1px solid var(--line);vertical-align:-1px}
+
+.tablewrap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font:inherit;font-size:.86rem}
+th,td{padding:7px 10px;text-align:left;white-space:nowrap}
+thead th{position:sticky;top:0;z-index:1;background:var(--surface);border-bottom:1px solid var(--line);font-size:.7rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+tbody td{border-bottom:1px solid var(--line)}
+tbody tr:last-child td{border-bottom:0}
+tfoot td{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);font-weight:600}
+.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+th.n{font-family:var(--f-body)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Fraktal złotego podziału</h1>
+    <p>Koło dzieli się na dwa styczne koła leżące na średnicy, w proporcji <span class="m">t</span> : (1 − <span class="m">t</span>). Każde z nich dzieli się tak samo, a kolor zmienia się co poziom. Całe czarne koło to rok, prawe koło to Q3 i Q4, a w nim prawe to Q4. Wpisz kwartały po kolei, a podświetli się koło, które im odpowiada.</p>
+  </header>
+
+  <div class="layout">
+    <div class="stage-col">
+      <div class="stage" id="stage">
+        <canvas id="cv" role="img" aria-label="Fraktal kół"></canvas>
+        <div class="zoombar">
+          <span class="zoomval" id="zoomval">×1</span>
+          <button type="button" class="zb" id="zout" aria-label="Oddal">−</button>
+          <button type="button" class="zb" id="zin" aria-label="Przybliż">+</button>
+          <button type="button" class="zb word" id="zreset">Całość</button>
+        </div>
+      </div>
+      <p class="note">Kółko myszy lub przyciski przybliżają, przeciąganie przesuwa, dwuklik pokazuje całość. Obraz zapiszesz prawym przyciskiem myszy.</p>
+    </div>
+
+    <div class="panel">
+      <section class="card" aria-labelledby="h-q">
+        <h2 id="h-q">Podświetlenie kwartałów</h2>
+
+        <div class="field">
+          <label class="lbl" for="qtext">Kwartały od największego koła</label>
+          <div class="qinput">
+            <input type="text" id="qtext" inputmode="text" autocomplete="off" spellcheck="false" placeholder="np. Q1 Q3 Q3 Q1 Q2">
+            <button type="button" class="btn" id="qclear">Wyczyść</button>
+          </div>
+          <div class="qpad" role="group" aria-label="Dopisz kwartał">
+            <button type="button" class="btn" data-q="1">Q1</button>
+            <button type="button" class="btn" data-q="2">Q2</button>
+            <button type="button" class="btn" data-q="3">Q3</button>
+            <button type="button" class="btn" data-q="4">Q4</button>
+            <button type="button" class="btn" id="qback" aria-label="Usuń ostatni kwartał">⌫</button>
+          </div>
+          <p class="note" id="qerr" hidden></p>
+        </div>
+
+        <div class="field" aria-live="polite">
+          <div class="path" id="qpath"></div>
+          <div class="qmeta" id="qmeta"></div>
+        </div>
+
+        <div class="colors">
+          <label class="color"><input type="color" id="colH" value="#ff4d1a"> kolor podświetlenia</label>
+          <button type="button" class="btn" id="qzoom">Przybliż do koła</button>
+        </div>
+        <p class="note">Każdy kwartał to dwa podziały: najpierw połowa (lewe koło to Q1 i Q2, prawe to Q3 i Q4), potem jej połowa. Następny kwartał dzieli to koło znowu na cztery i tak dalej.</p>
+      </section>
+
+      <section class="card" aria-labelledby="h-set">
+        <h2 id="h-set">Ustawienia</h2>
+
+        <div class="field">
+          <span class="lbl">Układ</span>
+          <div class="chips" id="ochips">
+            <button type="button" class="chip" data-o="h">poziomo · lewe → prawe</button>
+            <button type="button" class="chip" data-o="v">pionowo · górne → dolne</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-head"><label for="depth">Głębokość podziału</label><span class="val" id="depthval">10</span></div>
+          <input type="range" id="depth" min="0" max="30" step="1" value="10">
+          <p class="note">Tyle razy dzieli się każde koło. Poziom 0 to koło zewnętrzne, więc poziomów jest o jeden więcej. Podświetlenie samo dokłada poziomy, jeśli trzeba.</p>
+        </div>
+
+        <div class="field">
+          <div class="field-head"><label for="ratio" id="ratiolbl">Podział koła (lewe : prawe)</label><span class="val" id="ratioval">0,618 : 0,382</span></div>
+          <input type="range" id="ratio" min="0.15" max="0.85" step="0.001">
+          <div class="chips" id="rchips"></div>
+        </div>
+
+        <div class="field">
+          <span class="lbl">Kolory</span>
+          <div class="colors">
+            <label class="color"><input type="color" id="colA" value="#000000"> poziomy 0, 2, 4…</label>
+            <label class="color"><input type="color" id="colB" value="#ffffff"> poziomy 1, 3, 5…</label>
+            <button type="button" class="btn" id="swap">Zamień</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="h-cnt">
+        <h2 id="h-cnt">Liczenie kółek</h2>
+        <div class="total" aria-live="polite">
+          <div class="eyebrow">Wszystkich kółek</div>
+          <div class="big" id="total">0</div>
+          <div class="formula" id="formula"></div>
+        </div>
+        <dl class="stats">
+          <div><dt><span class="sw" id="swA"></span><span id="nameA">czarne</span></dt><dd id="cntA">0</dd></div>
+          <div><dt><span class="sw" id="swB"></span><span id="nameB">białe</span></dt><dd id="cntB">0</dd></div>
+          <div><dt>Poziomów</dt><dd id="levels">0</dd></div>
+          <div><dt>Rysowanych teraz</dt><dd id="shown">0</dd></div>
+        </dl>
+        <p class="note">Rysowane są kółka w kadrze, większe niż mniej więcej ⅓ piksela. Mniejsze też są policzone i pojawiają się po przybliżeniu.</p>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Poziom</th><th>Kolor</th><th class="n">Kółek</th><th class="n">Promień (R = 1)</th></tr></thead>
+            <tbody id="tbody"></tbody>
+            <tfoot id="tfoot"></tfoot>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const PHI_T = (Math.sqrt(5) - 1) / 2;
+  const FIT = 0.96, ZMAX = 50000, MINR = 0.35, TAU = Math.PI * 2, MAXDEPTH = 30;
+  const T_PRESETS = [
+    { t: PHI_T, label: '1/φ ≈ 0,618' },
+    { t: 0.5, label: '1/2' },
+    { t: 2 / 3, label: '2/3' },
+    { t: 1 - PHI_T, label: '1/φ² ≈ 0,382' },
+  ];
+  const nf = new Intl.NumberFormat('pl-PL');
+  const SUP = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const S = { depth: 10, t: PHI_T, colA: '#000000', colB: '#ffffff', colH: '#ff4d1a', orient: 'h', quarters: [] };
+  const view = { zoom: 1, x: 0, y: 0 };
+  let stats = null, needRebuild = true, raf = 0, anim = 0;
+
+  const cv = $('cv'), ctx = cv.getContext('2d'), stage = $('stage');
+
+  // Poziom k ma 2^k kół; największe to ciągle wybierane większe dziecko, najmniejsze to ciągle mniejsze.
+  function depthLevels(d, t) {
+    const big = Math.max(t, 1 - t), small = Math.min(t, 1 - t), levels = [];
+    for (let k = 0; k <= d; k++) levels.push({ count: 2 ** k, max: big ** k, min: small ** k });
+    return levels;
+  }
+
+  function rebuild() {
+    stats = { total: 2 ** (S.depth + 1) - 1, levels: depthLevels(S.depth, S.t) };
+    paintStats();
+  }
+
+  // Kwartał q (1..4) to dwa kroki w dół: pierwsza/druga połowa, potem pierwsza/druga połowa połowy.
+  const bitsOf = qs => qs.flatMap(q => [(q - 1) >> 1, (q - 1) & 1]);
+  // Położenie koła po ścieżce kroków; c to współrzędna wzdłuż osi podziału.
+  function circleAt(bits) {
+    let c = 0, r = 1;
+    for (const b of bits) {
+      const r1 = r * S.t, r2 = r - r1;
+      if (b) { c = c + r - r2; r = r2; } else { c = c - r + r1; r = r1; }
+    }
+    return { c, r };
+  }
+  const toXY = c => S.orient === 'h' ? [c, 0] : [0, c];
+
+  function draw() {
+    const size = cv.width;
+    if (!size) return;
+    ctx.clearRect(0, 0, size, size);
+    const k = size / 2 * FIT * view.zoom;
+    const ox = size / 2 - view.x * k, oy = size / 2 - view.y * k;
+    const horiz = S.orient === 'h';
+    const buckets = [];
+    let shown = 0;
+    const off = (sx, sy, rs) => sx + rs < 0 || sx - rs > size || sy + rs < 0 || sy - rs > size;
+    const add = (lv, sx, sy, rs) => { (buckets[lv] || (buckets[lv] = [])).push(sx, sy, rs); shown++; };
+
+    // Każde koło dzieli się na pierwsze o promieniu r·t i drugie o promieniu r·(1−t), styczne do siebie i do rodzica.
+    // Dzieci leżą w rodzicu i są od niego mniejsze, więc koło za małe albo poza kadrem ucina całą gałąź.
+    const t = S.t, D = S.depth;
+    const walk = (c, r, lv) => {
+      const rs = r * k;
+      if (rs < MINR) return;
+      const sx = horiz ? ox + c * k : ox, sy = horiz ? oy : oy + c * k;
+      if (off(sx, sy, rs)) return;
+      add(lv, sx, sy, rs);
+      if (lv < D) {
+        const r1 = r * t, r2 = r - r1;
+        walk(c - r + r1, r1, lv + 1);
+        walk(c + r - r2, r2, lv + 1);
+      }
+    };
+    walk(0, 1, 0);
+
+    // Koła z jednego poziomu są rozłączne, więc każdy poziom to jedna ścieżka i jedno wypełnienie.
+    for (let lv = 0; lv < buckets.length; lv++) {
+      const b = buckets[lv];
+      if (!b) continue;
+      ctx.beginPath();
+      for (let j = 0; j < b.length; j += 3) {
+        const sx = b[j], sy = b[j + 1], rs = b[j + 2];
+        ctx.moveTo(sx + rs, sy);
+        ctx.arc(sx, sy, rs, 0, TAU);
+      }
+      ctx.fillStyle = lv % 2 ? S.colB : S.colA;
+      ctx.fill();
+    }
+
+    if (S.quarters.length) drawHighlight(k, ox, oy, size);
+    $('shown').textContent = nf.format(shown);
+  }
+
+  // Podświetlenie: obwódki kół po drodze (co kwartał) i wypełnione koło docelowe.
+  function drawHighlight(k, ox, oy, size) {
+    const bits = bitsOf(S.quarters), lw = Math.max(1.5, size / 400);
+    const ring = (bitsTo, width, alpha) => {
+      const { c, r } = circleAt(bitsTo), [x, y] = toXY(c), rs = r * k;
+      if (rs < 0.5) return null;
+      ctx.beginPath();
+      ctx.arc(ox + x * k, oy + y * k, rs, 0, TAU);
+      ctx.globalAlpha = alpha; ctx.lineWidth = width; ctx.strokeStyle = S.colH; ctx.stroke();
+      ctx.globalAlpha = 1;
+      return { sx: ox + x * k, sy: oy + y * k, rs };
+    };
+    for (let i = 2; i < bits.length; i += 2) ring(bits.slice(0, i), lw, 0.55);
+    const tgt = ring(bits, lw * 1.8, 1);
+    if (!tgt) return;
+    ctx.beginPath();
+    ctx.arc(tgt.sx, tgt.sy, tgt.rs, 0, TAU);
+    ctx.globalAlpha = 0.45; ctx.fillStyle = S.colH; ctx.fill(); ctx.globalAlpha = 1;
+    // Za małe na ekranie: znacznik z kreską, żeby było widać, gdzie szukać.
+    if (tgt.rs < 6) {
+      ctx.beginPath();
+      ctx.arc(tgt.sx, tgt.sy, 10 * lw / 1.5, 0, TAU);
+      ctx.lineWidth = lw; ctx.strokeStyle = S.colH; ctx.stroke();
+    }
+  }
+
+  function schedule(rebuildNeeded) {
+    if (rebuildNeeded) needRebuild = true;
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      if (needRebuild) { needRebuild = false; rebuild(); }
+      draw();
+    });
+  }
+
+  function fmtR(x) {
+    if (x >= 0.001) return x.toLocaleString('pl-PL', { maximumSignificantDigits: 3 });
+    let e = Math.floor(Math.log10(x)), m = x / 10 ** e;
+    if (m >= 9.995) { m /= 10; e++; }
+    return m.toLocaleString('pl-PL', { maximumFractionDigits: 2 }) + '·10' + String(e).replace(/./g, c => SUP[c]);
+  }
+
+  function colName(hex, i) {
+    const h = hex.toLowerCase();
+    if (h === '#000000') return 'czarne';
+    if (h === '#ffffff') return 'białe';
+    return 'kolor ' + i;
+  }
+
+  function paintStats() {
+    if (!stats) return;
+    const lv = stats.levels;
+    let a = 0, b = 0, rmin = Infinity;
+    lv.forEach((L, i) => {
+      if (i % 2) b += L.count; else a += L.count;
+      if (L.min < rmin) rmin = L.min;
+    });
+
+    $('total').textContent = nf.format(stats.total);
+    $('cntA').textContent = nf.format(a);
+    $('cntB').textContent = nf.format(b);
+    $('nameA').textContent = colName(S.colA, 1);
+    $('nameB').textContent = colName(S.colB, 2);
+    $('swA').style.background = S.colA;
+    $('swB').style.background = S.colB;
+    $('levels').textContent = nf.format(lv.length);
+    cv.setAttribute('aria-label', `Fraktal z ${nf.format(stats.total)} kółek na ${lv.length} poziomach`
+      + (S.quarters.length ? `, podświetlone koło ${S.quarters.map(q => 'Q' + q).join(' ')}` : ''));
+
+    $('formula').innerHTML = `2<sup>${S.depth + 1}</sup> − 1 = ${nf.format(stats.total)} · najmniejsze r = ${fmtR(rmin)} R`;
+
+    $('tbody').innerHTML = lv.map((L, i) => {
+      const col = i % 2 ? S.colB : S.colA;
+      const rr = L.max === L.min ? fmtR(L.max) : `${fmtR(L.min)} – ${fmtR(L.max)}`;
+      return `<tr><td class="n" style="text-align:left">${i}</td>`
+        + `<td><span class="sw" style="background:${col}"></span> ${colName(col, i % 2 + 1)}</td>`
+        + `<td class="n">${nf.format(L.count)}</td><td class="n">${rr}</td></tr>`;
+    }).join('');
+    $('tfoot').innerHTML = `<tr><td>Razem</td><td></td><td class="n">${nf.format(stats.total)}</td><td class="n">${fmtR(rmin)} – 1</td></tr>`;
+  }
+
+  function syncUI() {
+    $('depth').value = S.depth;
+    $('depthval').textContent = S.depth;
+    $('ratio').value = S.t;
+    const f3 = x => x.toLocaleString('pl-PL', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+    $('ratioval').textContent = `${f3(S.t)} : ${f3(1 - S.t)}`;
+    $('ratiolbl').textContent = S.orient === 'h' ? 'Podział koła (lewe : prawe)' : 'Podział koła (górne : dolne)';
+    $('colA').value = S.colA;
+    $('colB').value = S.colB;
+    $('colH').value = S.colH;
+    document.documentElement.style.setProperty('--hl', S.colH);
+    for (const b of $('rchips').children) b.setAttribute('aria-pressed', String(Math.abs(Number(b.dataset.t) - S.t) < 1e-12));
+    for (const b of $('ochips').children) b.setAttribute('aria-pressed', String(b.dataset.o === S.orient));
+  }
+
+  // --- kwartały ---
+  const MAXQ = Math.floor(MAXDEPTH / 2);
+  // Przyjmuje „Q1 Q3 Q3”, „q1,q3,q3” albo same cyfry „133”.
+  function parseQuarters(text) {
+    const s = text.toUpperCase().replace(/Q/g, ' ');
+    if (/[^1-4\s,;.\-→>/]/.test(s)) return null;
+    return (s.match(/[1-4]/g) || []).map(Number);
+  }
+  const halfName = side => S.orient === 'h' ? (side ? 'prawe' : 'lewe') : (side ? 'dolne' : 'górne');
+
+  function setQuarters(qs, fromInput) {
+    const tooMany = qs.length > MAXQ;
+    S.quarters = qs.slice(0, MAXQ);
+    if (S.depth < S.quarters.length * 2) S.depth = S.quarters.length * 2;
+    if (!fromInput) $('qtext').value = S.quarters.map(q => 'Q' + q).join(' ');
+    $('qerr').hidden = !tooMany;
+    $('qerr').textContent = tooMany ? `Najwięcej ${MAXQ} kwartałów (${MAXDEPTH} poziomów podziału).` : '';
+    paintPath();
+    syncUI();
+    schedule(true);
+    try { history.replaceState(null, '', S.quarters.length ? '#q=' + S.quarters.join('') : location.pathname + location.search); } catch (_) {}
+  }
+
+  function paintPath() {
+    const qs = S.quarters, host = $('qpath');
+    if (!qs.length) {
+      host.innerHTML = '<span class="step on"><span class="dot"></span>Rok</span>';
+      $('qmeta').textContent = 'Nic nie wpisano, więc wybrane jest całe koło.';
+      $('qzoom').disabled = true;
+      return;
+    }
+    $('qzoom').disabled = false;
+    host.innerHTML = ['Rok', ...qs.map(q => 'Q' + q)].map((txt, i) =>
+      (i ? '<span class="sep">›</span>' : '')
+      + `<span class="step${i === qs.length ? ' on' : ''}">${i === qs.length ? '<span class="dot"></span>' : ''}${txt}</span>`
+    ).join('');
+    const { r } = circleAt(bitsOf(qs));
+    const last = qs[qs.length - 1];
+    $('qmeta').textContent = `Poziom ${qs.length * 2} · promień ${fmtR(r)} R · ostatni krok: ${halfName((last - 1) >> 1)} koło, w nim ${halfName((last - 1) & 1)}`;
+  }
+
+  // --- widok: przybliżanie i przesuwanie ---
+  function clampView() {
+    const lim = Math.max(0, 1 - 1 / view.zoom);
+    view.x = Math.min(lim, Math.max(-lim, view.x));
+    view.y = Math.min(lim, Math.max(-lim, view.y));
+  }
+  function updateZoomUi() {
+    const z = view.zoom;
+    $('zoomval').textContent = '×' + (z < 10 ? z.toLocaleString('pl-PL', { maximumFractionDigits: 1 }) : nf.format(Math.round(z)));
+    stage.classList.toggle('zoomed', z > 1.001);
+    $('zout').disabled = z <= 1.001;
+    $('zin').disabled = z >= ZMAX;
+  }
+  function zoomAt(clientX, clientY, f) {
+    cancelAnimationFrame(anim);
+    const rect = cv.getBoundingClientRect();
+    const px = (clientX - rect.left) / rect.width - 0.5, py = (clientY - rect.top) / rect.height - 0.5;
+    const half = 1 / (FIT * view.zoom);
+    const wx = view.x + px * 2 * half, wy = view.y + py * 2 * half;
+    view.zoom = Math.min(ZMAX, Math.max(1, view.zoom * f));
+    const half2 = 1 / (FIT * view.zoom);
+    view.x = wx - px * 2 * half2;
+    view.y = wy - py * 2 * half2;
+    clampView(); updateZoomUi(); schedule(false);
+  }
+  function panBy(dx, dy) {
+    cancelAnimationFrame(anim);
+    const rect = cv.getBoundingClientRect();
+    const half = 1 / (FIT * view.zoom);
+    view.x -= dx / rect.width * 2 * half;
+    view.y -= dy / rect.height * 2 * half;
+    clampView(); schedule(false);
+  }
+  // Płynny lot kamery: przybliżenie w skali logarytmicznej, środek liniowo.
+  function flyTo(zoom, x, y) {
+    cancelAnimationFrame(anim);
+    const to = { zoom: Math.min(ZMAX, Math.max(1, zoom)), x, y };
+    const from = { ...view };
+    const finish = () => { Object.assign(view, to); clampView(); updateZoomUi(); schedule(false); };
+    if (reduceMotion) return finish();
+    const t0 = performance.now(), dur = 700;
+    const step = now => {
+      const p = Math.min(1, (now - t0) / dur), e = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+      view.zoom = Math.exp(Math.log(from.zoom) + (Math.log(to.zoom) - Math.log(from.zoom)) * e);
+      view.x = from.x + (to.x - from.x) * e;
+      view.y = from.y + (to.y - from.y) * e;
+      clampView(); updateZoomUi(); draw();
+      if (p < 1) anim = requestAnimationFrame(step); else finish();
+    };
+    anim = requestAnimationFrame(step);
+  }
+  function resetView() { flyTo(1, 0, 0); }
+  function zoomToTarget() {
+    if (!S.quarters.length) return resetView();
+    const { c, r } = circleAt(bitsOf(S.quarters)), [x, y] = toXY(c);
+    flyTo(0.4 / r, x, y);
+  }
+  function zoomCenter(f) { const r = cv.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, f); }
+
+  cv.addEventListener('wheel', e => {
+    if (view.zoom <= 1.001 && e.deltaY > 0) return; // pozwól przewinąć stronę
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)));
+  }, { passive: false });
+
+  const pts = new Map();
+  let pinch = null;
+  const pinchState = () => {
+    const [a, b] = [...pts.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  cv.addEventListener('pointerdown', e => {
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) pinch = pinchState();
+    stage.classList.add('dragging');
+  });
+  cv.addEventListener('pointermove', e => {
+    const prev = pts.get(e.pointerId);
+    if (!prev) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) panBy(e.clientX - prev.x, e.clientY - prev.y);
+    else if (pts.size === 2) {
+      const p = pinchState();
+      if (pinch && pinch.d > 0) { zoomAt(p.x, p.y, p.d / pinch.d); panBy(p.x - pinch.x, p.y - pinch.y); }
+      pinch = p;
+    }
+  });
+  const endPointer = e => {
+    pts.delete(e.pointerId);
+    pinch = pts.size === 2 ? pinchState() : null;
+    if (!pts.size) stage.classList.remove('dragging');
+  };
+  cv.addEventListener('pointerup', endPointer);
+  cv.addEventListener('pointercancel', endPointer);
+  cv.addEventListener('dblclick', resetView);
+  $('zin').addEventListener('click', () => zoomCenter(2));
+  $('zout').addEventListener('click', () => zoomCenter(0.5));
+  $('zreset').addEventListener('click', resetView);
+
+  function sizeCanvas() {
+    const w = stage.getBoundingClientRect().width;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const s = Math.max(1, Math.round(w * dpr));
+    if (cv.width !== s) { cv.width = s; cv.height = s; }
+  }
+  new ResizeObserver(() => { sizeCanvas(); schedule(false); }).observe(stage);
+
+  // --- sterowanie ---
+  $('rchips').innerHTML = T_PRESETS.map(p => `<button type="button" class="chip" data-t="${p.t}">${p.label}</button>`).join('');
+
+  $('depth').addEventListener('input', () => { S.depth = Number($('depth').value); syncUI(); schedule(true); });
+  $('ratio').addEventListener('input', () => { S.t = Number($('ratio').value); syncUI(); paintPath(); schedule(true); });
+  $('rchips').addEventListener('click', e => {
+    const b = e.target.closest('[data-t]');
+    if (b) { S.t = Number(b.dataset.t); syncUI(); paintPath(); schedule(true); }
+  });
+  $('ochips').addEventListener('click', e => {
+    const b = e.target.closest('[data-o]');
+    if (!b || b.dataset.o === S.orient) return;
+    S.orient = b.dataset.o;
+    [view.x, view.y] = [view.y, view.x];
+    syncUI(); paintPath(); schedule(false);
+  });
+  $('colA').addEventListener('input', () => { S.colA = $('colA').value; paintStats(); schedule(false); });
+  $('colB').addEventListener('input', () => { S.colB = $('colB').value; paintStats(); schedule(false); });
+  $('colH').addEventListener('input', () => { S.colH = $('colH').value; syncUI(); schedule(false); });
+  $('swap').addEventListener('click', () => {
+    [S.colA, S.colB] = [S.colB, S.colA];
+    syncUI(); paintStats(); schedule(false);
+  });
+
+  $('qtext').addEventListener('input', () => {
+    const qs = parseQuarters($('qtext').value);
+    $('qtext').setAttribute('aria-invalid', String(qs === null));
+    if (qs === null) {
+      $('qerr').hidden = false;
+      $('qerr').textContent = 'Wpisz kwartały jako Q1–Q4, np. Q1 Q3 Q3 Q1 Q2.';
+      return;
+    }
+    setQuarters(qs, true);
+  });
+  $('qtext').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); zoomToTarget(); } });
+  document.querySelector('.qpad').addEventListener('click', e => {
+    const b = e.target.closest('[data-q]');
+    if (b) setQuarters([...S.quarters, Number(b.dataset.q)]);
+  });
+  $('qback').addEventListener('click', () => setQuarters(S.quarters.slice(0, -1)));
+  $('qclear').addEventListener('click', () => { setQuarters([]); resetView(); });
+  $('qzoom').addEventListener('click', zoomToTarget);
+
+  syncUI();
+  updateZoomUi();
+  sizeCanvas();
+  needRebuild = false;
+  const fromHash = /^#q=([1-4]+)$/.exec(location.hash);
+  setQuarters(fromHash ? fromHash[1].split('').map(Number) : []);
+  rebuild();
+  draw();
+})();
+</script>
+</body>
+</html>
